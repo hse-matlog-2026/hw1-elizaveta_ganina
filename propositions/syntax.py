@@ -154,12 +154,16 @@ class Formula:
         def walk(node: 'Formula'):
             if node is None:
                 return
-            if node.first is None and node.second is None:
-                if is_variable(node.root):
-                    res.add(node.root)
+            root = node.root
+            if is_variable(root):
+                res.add(root)
                 return
-            walk(node.first)
-            walk(node.second)
+            if is_constant(root):
+                return
+            left = getattr(node, 'first', None)
+            right = getattr(node, 'second', None)
+            walk(left)
+            walk(right)
         walk(self)
         return res
         # Task 1.2
@@ -176,13 +180,15 @@ class Formula:
         def walk(node: 'Formula'):
             if node is None:
                 return
-            if node.first is None and node.second is None:
-                if is_constant(node.root):
-                    ops.add(node.root)
-            else:
-                ops.add(node.root)
-            walk(node.first)
-            walk(node.second)
+            root = node.root
+            if is_constant(root):
+                ops.add(root)
+                return
+            if is_variable(root):
+                return
+            ops.add(root)
+            walk(getattr(node, 'first', None))
+            walk(getattr(node, 'second', None))
         walk(self)
         return ops
         # Task 1.3
@@ -204,60 +210,35 @@ class Formula:
             should be of ``None`` and an error message, where the error message
             is a string with some human-readable content.
         """
-        import re
-        var_re = re.compile(r'^[p-z][0-9]*')
-        const_re = re.compile(r'^[TF]')
-        s = string
-        if s == "":
+        if string == "":
             return None, "empty string"
-        m = var_re.match(s)
-        if m:
-            name = m.group(0)
-            return Formula(name), s[m.end():]
-        m = const_re.match(s)
-        if m:
-            c = m.group(0)
-            return Formula(c), s[m.end():]
-        if s[0] != '(':
-            return None, "expected '(' or variable/constant at start"
-        idx = 1
-        def begins_formula(ch):
-            return ch == '(' or ('p' <= ch <= 'z') or ch in ('T','F')
-        if idx >= len(s):
-            return None, "incomplete parenthesis"
-        if begins_formula(s[idx]):
-            left, rem = Formula._parse_prefix(s[idx:])
-            if left is None:
-                return None, "failed parsing left subformula: " + rem
-            if rem == "":
-                return None, "missing operator and right subformula"
-            op_chars = []
-            i = 0
-            while i < len(rem) and not begins_formula(rem[i]) and rem[i] != ')':
-                op_chars.append(rem[i]); i += 1
-            if len(op_chars) == 0:
-                return None, "missing operator between subformulas"
-            op = ''.join(op_chars)
-            right, rem2 = Formula._parse_prefix(rem[i:])
-            if right is None:
-                return None, "failed parsing right subformula: " + rem2
-            if rem2 == "" or rem2[0] != ')':
-                return None, "missing closing ')' after binary subformula"
-            return Formula(op, left, right), rem2[1:]
-        else:
-            i = idx
-            op_chars = []
-            while i < len(s) and not begins_formula(s[i]) and s[i] != ')':
-                op_chars.append(s[i]); i += 1
-            if len(op_chars) == 0:
-                return None, "missing unary operator token"
-            op = ''.join(op_chars)
-            child, rem = Formula._parse_prefix(s[i:])
+        first_ch = string[0]
+        if 'p' <= first_ch <= 'z':
+            i = 1
+            while i < len(string) and string[i].isdecimal():
+                i += 1
+            return Formula(string[:i]), string[i:]
+        if string[0] in ('T', 'F'):
+            return Formula(string[0]), string[1:]
+        if string[0] == '~':
+            child, rem = Formula._parse_prefix(string[1:])
             if child is None:
-                return None, "failed parsing unary child: " + rem
-            if rem == "" or rem[0] != ')':
-                return None, "missing closing ')' after unary"
-            return Formula(op, child), rem[1:]
+                return None, rem
+            return Formula('~', child), rem
+        if string[0] != '(':
+            return None, "expected '(', variable, constant or unary"
+        left, rem_after_left = Formula._parse_prefix(string[1:])
+        if left is None:
+            return None, rem_after_left
+        for op in ('->', '&', '|'):
+            if rem_after_left.startswith(op):
+                right, rem_after_right = Formula._parse_prefix(rem_after_left[len(op):])
+                if right is None:
+                    return None, rem_after_right
+                if rem_after_right == "" or rem_after_right[0] != ')':
+                    return None, "missing closing ')'"
+                return Formula(op, left, right), rem_after_right[1:]
+        return None, "missing or invalid binary operator"
         # Task 1.4
 
     @staticmethod
@@ -296,11 +277,11 @@ class Formula:
         Returns:
             The polish notation representation of the current formula.
         """
-        if self.first is None and self.second is None:
+        if is_variable(self.root) or is_constant(self.root):
             return self.root
-        if self.second is None:
-            return self.root + ' ' + self.first.polish()
-        return self.root + ' ' + self.first.polish() + ' ' + self.second.polish()
+        if is_unary(self.root):
+            return self.root + ' ' + getattr(self, 'first').polish()
+        return self.root + ' ' + getattr(self, 'first').polish() + ' ' + getattr(self, 'second').polish()
         # Optional Task 1.7
 
     @staticmethod
@@ -313,23 +294,29 @@ class Formula:
         Returns:
             A formula whose polish notation representation is the given string.
         """
-        import re
         tokens = string.strip().split()
-        if tokens == []:
+        if not tokens:
             raise ValueError("empty string")
-        def parse_from(i):
+        def parse_from(i: int):
             if i >= len(tokens):
                 return None, i, "unexpected end of tokens"
             tok = tokens[i]
-            if re.match(r'^[p-z][0-9]*$', tok) or tok in ('T','F'):
+            if is_variable(tok) or is_constant(tok):
                 return Formula(tok), i+1, None
-            child, j, err = parse_from(i+1)
-            if child is None:
-                return None, i, "failed parsing operand for operator " + tok
-            second, k, err2 = parse_from(j)
-            if second is None:
+            if is_unary(tok):
+                child, j, err = parse_from(i+1)
+                if child is None:
+                    return None, i, "failed parsing operand for unary " + tok
                 return Formula(tok, child), j, None
-            return Formula(tok, child, second), k, None
+            if is_binary(tok):
+                left, j, err1 = parse_from(i+1)
+                if left is None:
+                    return None, i, "failed parsing first operand for binary " + tok
+                right, k, err2 = parse_from(j)
+                if right is None:
+                    return None, i, "failed parsing second operand for binary " + tok
+                return Formula(tok, left, right), k, None
+            return None, i, "unknown token: " + tok
         formula, next_idx, err = parse_from(0)
         if formula is None or next_idx != len(tokens):
             raise ValueError("invalid polish string: " + (err or "parse incomplete"))
