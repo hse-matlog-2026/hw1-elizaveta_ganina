@@ -280,8 +280,8 @@ class Formula:
         if is_variable(self.root) or is_constant(self.root):
             return self.root
         if is_unary(self.root):
-            return self.root + ' ' + getattr(self, 'first').polish()
-        return self.root + ' ' + getattr(self, 'first').polish() + ' ' + getattr(self, 'second').polish()
+            return self.root + self.first.polish()
+        return self.root + self.first.polish() + self.second.polish()
         # Optional Task 1.7
 
     @staticmethod
@@ -294,32 +294,43 @@ class Formula:
         Returns:
             A formula whose polish notation representation is the given string.
         """
-        tokens = string.strip().split()
-        if not tokens:
+        if string == "":
             raise ValueError("empty string")
+
         def parse_from(i: int):
-            if i >= len(tokens):
-                return None, i, "unexpected end of tokens"
-            tok = tokens[i]
-            if is_variable(tok) or is_constant(tok):
-                return Formula(tok), i+1, None
-            if is_unary(tok):
-                child, j, err = parse_from(i+1)
-                if child is None:
-                    return None, i, "failed parsing operand for unary " + tok
-                return Formula(tok, child), j, None
-            if is_binary(tok):
-                left, j, err1 = parse_from(i+1)
-                if left is None:
-                    return None, i, "failed parsing first operand for binary " + tok
-                right, k, err2 = parse_from(j)
-                if right is None:
-                    return None, i, "failed parsing second operand for binary " + tok
-                return Formula(tok, left, right), k, None
-            return None, i, "unknown token: " + tok
-        formula, next_idx, err = parse_from(0)
-        if formula is None or next_idx != len(tokens):
-            raise ValueError("invalid polish string: " + (err or "parse incomplete"))
+            if i >= len(string):
+                raise ValueError("unexpected end")
+
+            ch = string[i]
+
+            if ch in ('T', 'F'):
+                return Formula(ch), i + 1
+
+            if 'p' <= ch <= 'z':
+                j = i + 1
+                while j < len(string) and string[j].isdecimal():
+                    j += 1
+                return Formula(string[i:j]), j
+
+            if ch == '~':
+                sub, j = parse_from(i + 1)
+                return Formula('~', sub), j
+
+            if ch in ('&', '|'):
+                left, j = parse_from(i + 1)
+                right, k = parse_from(j)
+                return Formula(ch, left, right), k
+
+            if string.startswith('->', i):
+                left, j = parse_from(i + 2)
+                right, k = parse_from(j)
+                return Formula('->', left, right), k
+
+            raise ValueError("invalid polish string")
+
+        formula, pos = parse_from(0)
+        if pos != len(string):
+            raise ValueError("invalid polish string")
         return formula
         # Optional Task 1.8
 
