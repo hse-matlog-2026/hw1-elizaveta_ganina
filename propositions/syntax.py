@@ -150,14 +150,12 @@ class Formula:
         Returns:
             A set of all variable names used in the current formula.
         """
-        import re
-        var_re = re.compile(r'^[p-z][0-9]*$')
-        res = set()
-        def walk(node):
+        res: Set[str] = set()
+        def walk(node: 'Formula'):
             if node is None:
                 return
             if node.first is None and node.second is None:
-                if var_re.match(node.root):
+                if is_variable(node.root):
                     res.add(node.root)
                 return
             walk(node.first)
@@ -174,17 +172,15 @@ class Formula:
             A set of all operators (including ``'T'`` and ``'F'``) used in the
             current formula.
         """
-        import re
-        var_re = re.compile(r'^[p-z][0-9]*$')
-        ops = set()
-        def walk(node):
+        ops: Set[str] = set()
+        def walk(node: 'Formula'):
             if node is None:
                 return
-            if not (node.first is None and node.second is None):
-                ops.add(node.root)
-            else:
-                if not var_re.match(node.root):
+            if node.first is None and node.second is None:
+                if is_constant(node.root):
                     ops.add(node.root)
+            else:
+                ops.add(node.root)
             walk(node.first)
             walk(node.second)
         walk(self)
