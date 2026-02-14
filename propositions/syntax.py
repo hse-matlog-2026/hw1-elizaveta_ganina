@@ -210,35 +210,35 @@ class Formula:
             should be of ``None`` and an error message, where the error message
             is a string with some human-readable content.
         """
-    if string == "":
-        return None, "empty string"
-    first_ch = string[0]
-    if 'p' <= first_ch <= 'z':
-        i = 1
-        while i < len(string) and string[i].isdecimal():
-            i += 1
-        return Formula(string[:i]), string[i:]
-    if string[0] in ('T', 'F'):
-        return Formula(string[0]), string[1:]
-    if string[0] == '~':
-        child, rem = Formula._parse_prefix(string[1:])
-        if child is None:
-            return None, rem
-        return Formula('~', child), rem
-    if string[0] != '(':
-        return None, "expected '(', variable, constant or unary"
-    left, rem_after_left = Formula._parse_prefix(string[1:])
-    if left is None:
-        return None, rem_after_left
-    for op in ('<->', '->', '-&', '-|', '+', '&', '|'):
-        if rem_after_left.startswith(op):
-            right, rem_after_right = Formula._parse_prefix(rem_after_left[len(op):])
-            if right is None:
-                return None, rem_after_right
-            if rem_after_right == "" or rem_after_right[0] != ')':
-                return None, "missing closing ')'"
-            return Formula(op, left, right), rem_after_right[1:]
-    return None, "missing or invalid binary operator"
+        if string == "":
+            return None, "empty string"
+        first_ch = string[0]
+        if 'p' <= first_ch <= 'z':
+            i = 1
+            while i < len(string) and string[i].isdecimal():
+                i += 1
+            return Formula(string[:i]), string[i:]
+        if string[0] in ('T', 'F'):
+            return Formula(string[0]), string[1:]
+        if string[0] == '~':
+            child, rem = Formula._parse_prefix(string[1:])
+            if child is None:
+                return None, rem
+            return Formula('~', child), rem
+        if string[0] != '(':
+            return None, "expected '(', variable, constant or unary"
+        left, rem_after_left = Formula._parse_prefix(string[1:])
+        if left is None:
+            return None, rem_after_left
+        for op in ('<->', '->', '-&', '-|', '+', '&', '|'):
+            if rem_after_left.startswith(op):
+                right, rem_after_right = Formula._parse_prefix(rem_after_left[len(op):])
+                if right is None:
+                    return None, rem_after_right
+                if rem_after_right == "" or rem_after_right[0] != ')':
+                    return None, "missing closing ')'"
+                return Formula(op, left, right), rem_after_right[1:]
+        return None, "missing or invalid binary operator"
         # Task 1.4
 
     @staticmethod
